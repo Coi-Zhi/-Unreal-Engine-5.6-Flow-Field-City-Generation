@@ -1,4 +1,10 @@
 # -Unreal-Engine-5.6-Flow-Field-City-Generation
+<img width="414" height="283" alt="屏幕截图 2026-04-30 231410" src="https://github.com/user-attachments/assets/ab2acf62-39a2-4999-9fb5-586af130b7d4" />
+
+---
+<img width="410" height="280" alt="屏幕截图 2026-04-30 231432" src="https://github.com/user-attachments/assets/b6599796-f482-4cd6-a76d-d8a9f99bcdf5" />
+
+
 # UE5 Procedural City Generator Plugin
 
 [English Version Below](#english-version)
@@ -62,3 +68,23 @@ This is a Procedural City Generation Plugin for Unreal Engine 5, built using the
 2.  Adjust parameters such as road width, density, and Seed in the EUW panel.
 3.  Clik **Bound_Update** to draw the Spline of Area, Clik **Select Bound** to adjusting the location, after that remember the Clik the **Bound_Update** again to update the location.
 4.  Click **Generate** to instantly spawn your procedural city.
+
+## 鳴謝 (Credits & Acknowledgments)
+
+本專案展示畫面中所使用的 3D 建築與物件模型，均來自知名免費開源資產庫 [Kenney](https://www.kenney.nl/)。
+非常感謝創作者為開源社群提供如此高品質的資產。
+
+*   **Asset Pack:** City Kit Suburban (2.0)
+*   **Creator:** Kenney
+*   **License:** Creative Commons Zero (CC0)
+*   **Links:** [Website](https://www.kenney.nl/) | [Twitter](https://twitter.com/KenneyNL) | [Support/Donate](https://www.kenney.nl/donate)
+
+---
+
+The 3D building and object models used in the demonstration of this project are sourced from [Kenney](https://www.kenney.nl/). 
+Huge thanks to the creator for providing such high-quality assets to the open-source community.
+
+*   **Asset Pack:** City Kit Suburban (2.0)
+*   **Creator:** Kenney
+*   **License:** Creative Commons Zero (CC0)
+*   **Links:** [Website](https://www.kenney.nl/) | [Twitter](https://twitter.com/KenneyNL) | [Support/Donate](https://www.kenney.nl/donate)
