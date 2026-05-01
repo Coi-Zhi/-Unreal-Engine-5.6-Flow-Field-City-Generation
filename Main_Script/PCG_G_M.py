@@ -8,6 +8,8 @@ from shapely.geometry import Point, LineString, Polygon
 from shapely.ops import unary_union, polygonize
 from shapely.geometry import LineString, MultiLineString
 
+import re
+
 Point2D = namedtuple('Point2D', ['x', 'y'])
 Point3D = namedtuple('Point3D', ['x', 'y', 'z'])
 T_Range = namedtuple('T_Range', ['min', 'max'])
@@ -722,7 +724,7 @@ def visualize_roads_UE(road_chains, color):
     unreal.log(f"Successfully visualized {len(road_chains)} road chains.")
 
 
-def spawn_zoned_buildings(json_data, asset_folder_path, 
+def spawn_zoned_buildings(json_data, theme_asset = None, 
                           default_z_offset=0.0, 
                           enable_line_trace=False,
                           label = "Building_Instance",
@@ -758,7 +760,7 @@ def spawn_zoned_buildings(json_data, asset_folder_path,
     # ==========================================
     # 3. 加載資產 & 預計算包圍盒大小
     # ==========================================
-    asset_paths = unreal.EditorAssetLibrary.list_assets(asset_folder_path, recursive=False)
+    #asset_paths = unreal.EditorAssetLibrary.list_assets(asset_folder_path, recursive=False)
 
     # HIGH_THRESHOLD = 3000.0
     # LOW_THRESHOLD  = 1000.0
@@ -771,56 +773,101 @@ def spawn_zoned_buildings(json_data, asset_folder_path,
     temp_mesh_data = [] 
     all_heights = []
 
-    # ==========================================
-    # 步驟 1：採集所有 Mesh 嘅高度與範圍數據
-    # ==========================================
-    for path in asset_paths:
-        asset_data = unreal.EditorAssetLibrary.find_asset_data(path)
-        if asset_data and asset_data.asset_class_path.asset_name == "StaticMesh":
-            mesh = asset_data.get_asset()
-            bounds = mesh.get_bounds()
-            hx = bounds.box_extent.x * SCALE
-            hy = bounds.box_extent.y * SCALE
-            
-            # 溫馨提示：如果你生成 Actor 嗰陣 Z 軸都會乘 SCALE，呢度建議改成 * 2.0 * SCALE
-            height = bounds.box_extent.z * 2.0 
+    safe_label = str(label)
+    layout_data = json_data
+    world = unreal.EditorLevelLibrary.get_editor_world()
 
-            mesh_extents[mesh] = (hx, hy)
-            all_meshes.append(mesh)
-            
-            temp_mesh_data.append((mesh, height))
-            all_heights.append(height)
+    # ==========================================
+    # 2. 劃定「絕對清空大框」(Eraser Bounding Box)
+    # ==========================================
+    # (這段保留不變，計算 min_x, max_x 等)[cite: 7]
+    all_x = [d["original_pos"][0] for d in layout_data]
+    all_y = [d["original_pos"][1] for d in layout_data]
+    
+    min_x, max_x = min(all_x), max(all_x)
+    min_y, max_y = min(all_y), max(all_y)
+    
+    center_x = (min_x + max_x) / 2.0
+    center_y = (min_y + max_y) / 2.0
+    max_radius = math.sqrt(((max_x-min_x)/2)**2 + ((max_y-min_y)/2)**2)
 
-    if not temp_mesh_data:
-        unreal.log_error("找不到任何靜態網格！There is no static mesh found in the folder !")
+    padding = 2000.0
+    clear_min_x = min_x - padding
+    clear_max_x = max_x + padding
+    clear_min_y = min_y - padding
+    clear_max_y = max_y + padding
+
+    # ==========================================
+    # 3. 解析 Data Asset (ThemeData)
+    # ==========================================
+    if not theme_asset:
+        unreal.log_error("未傳入 Data Asset！請在 UI 中選擇一個 Theme。")
+        return
+    
+    unreal.log(f"正在加載 Theme: {theme_asset.get_name()}")
+
+    # 讀取 Data Asset 中的 Buildings 陣列
+    # 注意：這裡的 "buildings" 必須與你在 BP_CityThemeConfig 中創建的變數名稱完全一致（不分大小寫）
+    building_configs = theme_asset.get_editor_property("buildings") 
+    
+    if not building_configs:
+        unreal.log_error("Data Asset 中沒有建築數據！請檢查 Theme 設定。")
         return
 
-    # ==========================================
-    # 步驟 2：根據分佈動態計算 Threshold
-    # ==========================================
-    max_h = max(all_heights)
-    min_h = min(all_heights)
-    height_diff = max_h - min_h
+    unreal.log(f"從 Theme 中讀取到 {len(building_configs)} 條建築配置。正在處理...")
 
-    # 將總高度差分為 3 等份 (可以按你需要調整比例，例如 0.6 同 0.3)
-    HIGH_THRESHOLD = min_h + (height_diff * 0.66)
-    LOW_THRESHOLD  = min_h + (height_diff * 0.33)
+    # 準備用來隨機選擇的列表與對應權重
+    all_meshes = []
+    mesh_weights = []
+    mesh_extents = {}
+    mesh_scale_ranges = {}
+    mesh_z_offsets = {}
+ 
+    # 结构体资产如果加载失败，提醒用户
 
-    unreal.log(f"動態高度劃分 -> 最矮 lowest: {min_h:.1f}, 最高 highest: {max_h:.1f}")
-    unreal.log(f"分界線 -> 高樓 High threshold>= {HIGH_THRESHOLD:.1f}, 矮樓 Low threshold< {LOW_THRESHOLD:.1f}")
+    for config in building_configs:
+        raw = config.export_text()
+        #unreal.log(f"Raw config text: {raw}")
+        #example test(Mesh_2_344134C2496756C73702EE9C8DA60913="/Script/Engine.StaticMesh'/Game/CityMesh/building-e.building-e'",Weight_5_3D5A082C4C9FAB76A9A4C9B2AF184E52=1.000000)
+        # (Mesh_2_XXX="/Script/Engine.StaticMesh'/Game/...'", Weight_5_XXX=1.0)
 
-    # ==========================================
-    # 步驟 3：正式分類
-    # ==========================================
-    for mesh, height in temp_mesh_data:
-        if height >= HIGH_THRESHOLD:
-            high_rises.append(mesh)
-        elif height >= LOW_THRESHOLD:
-            mid_rises.append(mesh)
-        else:
-            low_rises.append(mesh)
-            
-    unreal.log(f"分類結果 -> 高樓 high: {len(high_rises)}個, 中樓 Medium: {len(mid_rises)}個, 矮樓 low: {len(low_rises)}個")
+        # Match by prefix — safe even if GUIDs change after recompile
+        mesh_match = re.search(r'(Mesh_\w+)', raw)
+        weight_match = re.search(r'(Weight_\w+)', raw)
+
+        mesh_id = mesh_match.group(1) if mesh_match else None
+        weight_id = weight_match.group(1) if weight_match else None
+
+        unreal.log(f"mesh: {mesh_id}, weight: {weight_id}")
+
+
+        mesh = config.get_editor_property(f"{mesh_id}")
+        weight = config.get_editor_property(f"{weight_id}")
+     
+        if not mesh or weight <= 0:
+            continue # 跳過空模型或權重為 0 的設定
+
+        # 讀取其他自定義屬性 (如果有設定預設值，就可以安全讀取)
+        # z_off = config.get_editor_property("z_offset")
+        # s_min = config.get_editor_property("scale_min")
+        # s_max = config.get_editor_property("scale_max")
+
+        bounds = mesh.get_bounds()
+        # 這裡的 extent 計算先不乘上 Scale，因為 Scale 現在是動態的
+        hx = bounds.box_extent.x 
+        hy = bounds.box_extent.y 
+
+        all_meshes.append(mesh)
+        mesh_weights.append(weight)
+        mesh_extents[mesh] = (hx, hy)
+        # mesh_scale_ranges[mesh] = (s_min, s_max)
+        # mesh_z_offsets[mesh] = z_off
+        
+    if not all_meshes:
+        unreal.log_error("Data Asset 內無有效模型或權重皆為 0！")
+        return
+        
+    unreal.log(f"成功加載 Theme，共 {len(all_meshes)} 種建築配置。")
 
     with unreal.ScopedEditorTransaction("Spawn/Update City HISM"):
         # ==========================================
@@ -939,11 +986,17 @@ def spawn_zoned_buildings(json_data, asset_folder_path,
             )
 
             hx, hy = mesh_extents[selected_mesh]
+
+            # 👇 必須在這裡補回縮放比例！否則防穿模系統會失效
+            hx = hx * SCALE
+            hy = hy * SCALE
+            
             buffer = 10.0
             bmin_x = pos_x - hx + buffer
             bmax_x = pos_x + hx - buffer
             bmin_y = pos_y - hy + buffer
             bmax_y = pos_y + hy - buffer
+
 
             if is_overlapping(bmin_x, bmax_x, bmin_y, bmax_y):
                 skipped_count += 1
@@ -995,10 +1048,19 @@ def spawn_zoned_buildings(json_data, asset_folder_path,
                 hism_comps[mesh].add_instances(transforms, False, True)
                 
         unreal.log(f"✅ 生成/更新完成！已無差別清空大框範圍，並寫入了 {len(new_buildings_data)} 棟新數據。")
-        return len(new_buildings_data)
+        # 统计所有 HISM 组件中的实例总数
+        total_instances = 0
+        for mesh_asset, comp in hism_comps.items():
+            if comp:
+                # get_instance_count() 直接返回该组件管理的建筑数量
+                total_instances += comp.get_instance_count()
+        
+        unreal.log(f"📊 统计完成：当前 City_Actor 共有 {total_instances} 栋建筑。")
+        return total_instances
 
 
-def main( Width, Length,point_list,road_width,seed,label,Mesh_Scale):
+
+def main( Width, Length,point_list,road_width,seed,label,Mesh_Scale,theme_asset,Actor_location):
     unreal.log("entering main function")
     unreal.log(f"point_list: {point_list}, Width: {Width}, Length: {Length}")
     unreal.log(f"label in as : {label}")
@@ -1076,8 +1138,12 @@ def main( Width, Length,point_list,road_width,seed,label,Mesh_Scale):
     min_y = min(p.y for p in point_list)
     max_y = max(p.y for p in point_list)
 
-    offset_x = (min_x + max_x) * 0.5
-    offset_y = (min_y + max_y) * 0.5
+    # offset_x = (min_x + max_x) * 0.5
+    # offset_y = (min_y + max_y) * 0.5
+
+    offset_x = Actor_location.x
+    offset_y = Actor_location.y
+
 
     for item in direction_vec:
         orig_x, orig_y = item["original_pos"]
@@ -1087,12 +1153,19 @@ def main( Width, Length,point_list,road_width,seed,label,Mesh_Scale):
         item["snapped_pos"]   = (float(snap_x) + offset_x, float(snap_y) + offset_y)
 
     label = str(label)
-    spawn_zoned_buildings(
+    total_instances = spawn_zoned_buildings(
         json_data=direction_vec,
-        asset_folder_path="/Game/City_Generate/CityMesh",
+        #asset_folder_path="/Game/CityMesh",
+        theme_asset = theme_asset,
         default_z_offset=0.0,
         enable_line_trace=True  ,
         label = label,
         Mesh_Scale=Mesh_Scale,
     )
+
+    total_instances = total_instances
+    unreal.log(f"總共有 {total_instances} 棟建築實例。")
+    return total_instances
+
+
     ...

@@ -23,6 +23,8 @@
     利用向量流場演算法計算干擾點，生成具備自然有機感的城市道路網。隨後利用開源幾何庫 Shapely 將路網精確切割為獨立地塊，並向內縮進計算出可建築的安全區域。
 *   **精準地形貼合 (Raycast Sequencing)**
     嚴格控制執行順序：先清空舊實例碰撞，再發射 Z 軸射線進行地形測高，最後實例化新建築。這避免了射線誤擊舊有建築屋頂的問題，確保 100% 準確降落於真實地表。
+*   **自定義建築群組 (Data-Driven Theme Configuration)**
+    引入基於 Struct 與 Data Asset 的資料驅動工作流。美術人員無需修改程式碼，即可透過 UMG 面板無縫切換不同的城市主題。系統支援精細控制單一建築模型的生成權重 (Weight)、種類配置與幾何變形 (Scale/Z-Offset)，大幅提升迭代效率與資產管理的靈活性。
 
 ## 系統需求與安裝 (Requirements & Installation)
 1.  **Unreal Engine**: 5.x 版本
@@ -32,10 +34,18 @@
     *   執行指令: `python.exe -m pip install shapely`
 
 ## 快速開始 (Quick Start)
-1.  在 Content Browser 中找到本插件提供的 Editor Utility Widget (EUW)，右鍵選擇 **Run Editor Utility Widget**。
-2.  在 EUW 面板中設定道路寬度、密度、Seed 等參數。
-3.  點擊 **Bound_Update** 進行範圍繪製，點擊**Select Bound**后能對這個範圍進行移動，之後記得再次點解**Bound_Update**更新位置。
-4.  點擊 **Generate** 即可瞬間生成城市。
+1.  **開啟工具**：在 Content Browser 中找到本插件提供的 Editor Utility Widget (EUW)，右鍵選擇 **Run Editor Utility Widget**。
+2.  **配置城市主題 (Data Asset)**：
+    *   在插件資料夾內找到預設的 Data Asset (例如 `DA_DefaultTheme`) 並雙擊打開。
+    *   在 `Buildings` 陣列中，將預設的 Static Mesh 替換為你自己的建築模型。
+    *   你可以在此自定義每一棟建築的生成權重 (Weight) 與縮放範圍，完成後點擊 Save。
+3.  **繪製生成範圍**：
+    *   點擊 EUW 面板上的 **Bound_Update** 進行範圍繪製。
+    *   點擊 **Select Bound** 後，可以在場景中移動或旋轉這個範圍框。調整完畢後，**務必再次點擊 Bound_Update** 以更新底層座標數據。
+4.  **設定參數與生成**：
+    *   在 EUW 面板中，將剛才配置好的 Data Asset 拖曳至 `Theme Data` 欄位。
+    *   設定道路寬度、密度、Seed 等全域參數。
+    *   點擊 **Generate** 即可瞬間生成你的專屬城市！
 
 ---
 
@@ -55,6 +65,8 @@ This is a Procedural City Generation Plugin for Unreal Engine 5, built using the
     Generates organic, natural-looking road networks using a vector flow field algorithm. The open-source geometry library Shapely is then used to precisely partition the road network into independent parcels and calculate safe building zones via polygon buffering.
 *   **Accurate Terrain Snapping (Raycast Sequencing)**
     Strictly manages the execution pipeline: it first clears the collision of old instances, then performs Z-axis raycasting for terrain height detection, and finally spawns the new buildings. This prevents raycasts from hitting old rooftops, ensuring 100% accurate snapping to the landscape.
+*   **Custom Building Themes (Data-Driven Configuration)**
+    Introduces a Data Asset and Struct-based workflow for artist-friendly customization. Users can seamlessly switch between different city themes via the UMG panel without writing code. The system allows precise control over individual building meshes, including their spawn probabilities (weights), scale ranges, and Z-axis offsets, maximizing asset management flexibility and iteration speed.
 
 ## Requirements & Installation
 1.  **Unreal Engine**: Version 5.x
@@ -64,10 +76,18 @@ This is a Procedural City Generation Plugin for Unreal Engine 5, built using the
     *   Run command: `python.exe -m pip install shapely`
 
 ## Quick Start
-1.  Locate the Editor Utility Widget (EUW) provided by the plugin in the Content Browser, right-click, and select **Run Editor Utility Widget**.
-2.  Adjust parameters such as road width, density, and Seed in the EUW panel.
-3.  Clik **Bound_Update** to draw the Spline of Area, Clik **Select Bound** to adjusting the location, after that remember the Clik the **Bound_Update** again to update the location.
-4.  Click **Generate** to instantly spawn your procedural city.
+1.  **Open the Tool**: Locate the provided Editor Utility Widget (EUW) in your Content Browser, right-click, and select **Run Editor Utility Widget**.
+2.  **Configure City Theme (Data Asset)**:
+    *   Find the default Data Asset (e.g., `DA_DefaultTheme`) included in the package and double-click to open it.
+    *   In the `Buildings` array, replace the default placeholder Static Meshes with your own building models.
+    *   Customize the spawn weight and scale range for each building, then click Save.
+3.  **Define Generation Boundary**:
+    *   Click **Bound_Update** on the EUW panel to draw the generation bounding box.
+    *   Click **Select Bound** to move or rotate the box within the viewport. Once adjusted, **you must click Bound_Update again** to refresh the underlying coordinate data.
+4.  **Set Parameters & Generate**:
+    *   Drag and drop your configured Data Asset into the `Theme Data` slot on the EUW panel.
+    *   Adjust global parameters such as road width, density, and seed.
+    *   Click **Generate** to instantly spawn your custom city!
 
 ## 鳴謝 (Credits & Acknowledgments)
 
