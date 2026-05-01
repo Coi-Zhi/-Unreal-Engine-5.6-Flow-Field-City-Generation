@@ -9,6 +9,7 @@ from shapely.ops import unary_union, polygonize
 from shapely.geometry import LineString, MultiLineString
 
 import re
+import threading
 
 Point2D = namedtuple('Point2D', ['x', 'y'])
 Point3D = namedtuple('Point3D', ['x', 'y', 'z'])
@@ -345,10 +346,10 @@ def potential_seed_point(w, l, seed_count):
             
             if is_horizontal:
                 # 横向边：pos 是 x，fixed 是 y
-                pt = unreal.Vector(pos, fixed, 0.0)
+                pt = Point2D(pos, fixed)
             else:
                 # 纵向边：fixed 是 x，pos 是 y
-                pt = unreal.Vector(fixed, pos, 0.0)
+                pt = Point2D(fixed, pos)
                 
             seed_points.append(pt)
 
@@ -1169,3 +1170,134 @@ def main( Width, Length,point_list,road_width,seed,label,Mesh_Scale,theme_asset,
 
 
     ...
+
+# ==========================================
+# 異步生成系統 (Async Generation System)
+# ==========================================
+
+# 1. 全局狀態變數
+_async_progress = 0.0
+_async_message = "等待中..."
+_async_is_done = False
+_async_layout_data = None
+
+def _heavy_math_worker(Width, Length, road_width, seed, offset_x, offset_y):
+    """
+    背景工作執行緒：只負責純數學與幾何運算，絕對不可包含 unreal.xxx 引擎操作
+    """
+    global _async_progress, _async_message, _async_is_done, _async_layout_data
+    
+    _async_is_done = False
+    _async_progress = 0.0
+    _async_message = "初始化生成參數..."
+    
+    try:
+        w = Width
+        l = Length
+        Area = w * l
+        Area_per_House = 7000 * 12000
+        
+        core_count = Area // (Area_per_House * 100)
+        sub_core_count = Area // (Area_per_House * 5)
+        if core_count < 1: core_count = 1
+
+        U_V_Sample_count = 100
+        A, B = 0.01, 0.3
+        grid_step = ((w + l) / 2) / U_V_Sample_count
+        influent_rad = grid_step * 15
+
+        _async_progress = 0.1
+        _async_message = "計算城市核心與採樣網格..."
+        joint_point = []
+        joint_point.extend(populate_2d(w*0.5, l*0.5, core_count, seed))
+        joint_point.extend(populate_2d(w*0.8, l*0.8, sub_core_count))
+        uv_sample_point = uv_point_sample(w, l, U_V_Sample_count)
+
+        _async_progress = 0.3
+        _async_message = "計算幾何向量流場 (Flow Field)..."
+        major_list, minor_list = flow_field(uv_sample_point, joint_point, A, B, influence_rad=influent_rad)
+
+        edge_total_length = (w + l) * 2
+        total_edge_point_need = int(edge_total_length // (12000*2))
+        seed_points = potential_seed_point(w, l, total_edge_point_need)
+
+        _async_progress = 0.5
+        _async_message = "生成主要與次要道路網..."
+        road_1 = generate_roads_shapely(seed_points, uv_sample_point, major_list, step=1000, max_steps=300, snap_dist=500)
+        road_2 = generate_roads_shapely(seed_points, uv_sample_point, minor_list, step=1000, max_steps=300, snap_dist=500)
+
+        _async_progress = 0.7
+        _async_message = "切割城市地塊與內縮 (Shapely)..."
+        bound = Polygon([(-w/2, -l/2), (w/2, -l/2), (w/2, l/2), (-w/2, l/2)])
+        parcle = partition_parcels(bound, road_1, road_2)
+        parcle = process_parcels_attributes(parcle, offset_dist=-road_width)
+
+        _async_progress = 0.85
+        _async_message = "計算建築落點與邊界吸附..."
+        position_points = sample_points_with_edge_bias(parcle, density_factor=0.05, falloff=w*0.3)
+        direction_vec = snap_and_get_tangent(position_points, parcle)
+
+        _async_progress = 0.95
+        _async_message = "處理世界座標偏移..."
+        # 應用傳入的 offset_x 和 offset_y
+        for item in direction_vec:
+            orig_x, orig_y = item["original_pos"]
+            snap_x, snap_y = item["snapped_pos"]
+            item["original_pos"] = (float(orig_x) + offset_x, float(orig_y) + offset_y)
+            item["snapped_pos"]  = (float(snap_x) + offset_x, float(snap_y) + offset_y)
+
+        _async_layout_data = direction_vec
+        _async_progress = 1.0
+        _async_message = "計算完成！準備寫入 UE 場景..."
+        _async_is_done = True
+
+    except Exception as e:
+        _async_message = f"計算發生錯誤: {str(e)}"
+        _async_is_done = True
+        print(f"Async Error: {e}")
+
+# 2. 啟動異步計算的 API
+def start_generation_async(Width, Length, road_width, seed, actor_loc_x, actor_loc_y):
+    """ UE 藍圖呼叫此函數啟動背景計算 """
+    unreal.log("啟動異步計算執行緒...")
+    # 將 Actor Location 拆解為 float 傳入，確保執行緒安全
+    thread = threading.Thread(target=_heavy_math_worker, args=(Width, Length, road_width, seed, actor_loc_x, actor_loc_y))
+    thread.daemon = True
+    thread.start()
+
+# 3. 獲取狀態的 API (供 Timer 讀取)
+def get_async_status():
+    """ UE 藍圖定期呼叫此函數獲取進度 """
+    global _async_progress, _async_message, _async_is_done
+    return _async_progress, _async_message, _async_is_done
+
+def reset_async_state():
+    """ 可選：重置異步狀態，準備下一次生成 """
+    global _async_progress, _async_message, _async_is_done, _async_layout_data
+    _async_progress = 0.0
+    _async_message = "等待中..."
+    _async_is_done = False
+    _async_layout_data = None
+
+# 4. 主執行緒生成的 API
+def execute_spawning_main_thread(label, Mesh_Scale, theme_asset):
+    """ 計算完成後，由 UE 主執行緒呼叫此函數進行實例化 """
+    global _async_layout_data
+    if not _async_layout_data:
+        unreal.log_error("錯誤：沒有佈局數據，請先執行 start_generation_async！")
+        return 0
+        
+    unreal.log(f"開始在主執行緒生成 {len(_async_layout_data)} 棟建築...")
+    
+    # 呼叫你原本的生成函數，這部分會在主執行緒安全執行並支援 Undo/Redo
+    total_instances = spawn_zoned_buildings(
+        json_data=_async_layout_data,
+        theme_asset=theme_asset,
+        default_z_offset=0.0,
+        enable_line_trace=True,
+        label=str(label),
+        Mesh_Scale=Mesh_Scale,
+    )
+    
+    unreal.log(f"✅ 生成完畢！總共有 {total_instances} 棟建築實例。")
+    return total_instances

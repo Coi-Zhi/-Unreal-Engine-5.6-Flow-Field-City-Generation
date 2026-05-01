@@ -25,6 +25,12 @@
     嚴格控制執行順序：先清空舊實例碰撞，再發射 Z 軸射線進行地形測高，最後實例化新建築。這避免了射線誤擊舊有建築屋頂的問題，確保 100% 準確降落於真實地表。
 *   **自定義建築群組 (Data-Driven Theme Configuration)**
     引入基於 Struct 與 Data Asset 的資料驅動工作流。美術人員無需修改程式碼，即可透過 UMG 面板無縫切換不同的城市主題。系統支援精細控制單一建築模型的生成權重 (Weight)、種類配置與幾何變形 (Scale/Z-Offset)，大幅提升迭代效率與資產管理的靈活性。
+*   **非阻塞異步架構 (Asynchronous Processing & Non-Blocking UI)**
+    徹底重構底層執行邏輯，將高密度的幾何運算（如 Flow Field 計算與 Shapely 地塊分割）全數剝離至背景執行緒 (Background Thread) 執行。生成大型城市時，Unreal Engine 編輯器將保持絕對流暢，徹底告別卡頓與「無回應」狀態。
+*   **實時進度回饋 (Real-time Progress Synchronization)**
+    建立跨執行緒的安全通訊橋樑。透過藍圖 Timer Handle 機制精準監控背景運算，使用者可在 UMG 控制面板上即時查看當前計算階段與進度條 (Progress Bar)，提供極致順暢的工具交互體驗。
+*   **極限執行緒安全與存檔支援 (Thread-Safe Instantiation)**
+    嚴格劃分運算與渲染邊界：背景執行緒僅處理純粹的數據演算，待資料備妥後，系統會精準切換回主執行緒 (Main Thread) 執行 HISM 生成與射線檢測。這不僅杜絕了跨執行緒呼叫 UE 引擎造成的崩潰風險，更完美保留了編輯器的 Undo/Redo (Ctrl+Z) 功能。
 
 ## 系統需求與安裝 (Requirements & Installation)
 1.  **Unreal Engine**: 5.x 版本
@@ -67,6 +73,12 @@ This is a Procedural City Generation Plugin for Unreal Engine 5, built using the
     Strictly manages the execution pipeline: it first clears the collision of old instances, then performs Z-axis raycasting for terrain height detection, and finally spawns the new buildings. This prevents raycasts from hitting old rooftops, ensuring 100% accurate snapping to the landscape.
 *   **Custom Building Themes (Data-Driven Configuration)**
     Introduces a Data Asset and Struct-based workflow for artist-friendly customization. Users can seamlessly switch between different city themes via the UMG panel without writing code. The system allows precise control over individual building meshes, including their spawn probabilities (weights), scale ranges, and Z-axis offsets, maximizing asset management flexibility and iteration speed.
+*   **Asynchronous Processing & Non-Blocking UI**
+    Completely refactored the underlying architecture to offload heavy mathematical computations (e.g., Flow Field processing and Shapely parcel partitioning) to a background thread. The Unreal Engine editor remains completely responsive during large-scale city generation, eliminating freezes and "Not Responding" states.
+*   **Real-time Progress Feedback**
+    Established a safe cross-thread communication bridge. Using a Blueprint Timer Handle mechanism to monitor background tasks, users can view real-time status updates and progress bar completion directly on the UMG dashboard, delivering a premium user experience.
+*   **Thread-Safe Instantiation & Undo Support**
+    Strictly delineated computation from rendering: the background thread handles pure data processing, while the final layout is securely handed off to the Main Thread for HISM spawning and raycasting. This eliminates crash risks associated with thread-unsafe UE API calls and flawlessly preserves editor Undo/Redo (Ctrl+Z) functionality.
 
 ## Requirements & Installation
 1.  **Unreal Engine**: Version 5.x
