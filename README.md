@@ -40,7 +40,7 @@
     *   執行指令: `python.exe -m pip install shapely`
 
 ## 快速開始 (Quick Start)
-1.  **開啟工具**：在 Content Browser 中找到本插件提供的 Editor Utility Widget (EUW)，右鍵選擇 **Run Editor Utility Widget**。
+1.  **開啟工具**：安裝完成后，在編輯器内，windows 下拉菜單内，就能找到City_Generation_Tool_Bar，點擊即可使用。
 2.  **配置城市主題 (Data Asset)**：
     *   在插件資料夾內找到預設的 Data Asset (例如 `DA_DefaultTheme`) 並雙擊打開。
     *   在 `Buildings` 陣列中，將預設的 Static Mesh 替換為你自己的建築模型。
@@ -88,7 +88,7 @@ This is a Procedural City Generation Plugin for Unreal Engine 5, built using the
     *   Run command: `python.exe -m pip install shapely`
 
 ## Quick Start
-1.  **Open the Tool**: Locate the provided Editor Utility Widget (EUW) in your Content Browser, right-click, and select **Run Editor Utility Widget**.
+1.  **Open the Tool**: Locate the City_Generation_Tool_Bar option under the Window menu in the editor. Click it to activate the Editor Utility Widget (EUW).
 2.  **Configure City Theme (Data Asset)**:
     *   Find the default Data Asset (e.g., `DA_DefaultTheme`) included in the package and double-click to open it.
     *   In the `Buildings` array, replace the default placeholder Static Meshes with your own building models.

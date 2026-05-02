@@ -1,0 +1,23 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "City_Generation_Tool",
+	"Description": "A data-driven procedural city generation tool utilizing Flow Fields and Spatial Hash Grid.",
+	"Category": "Other",
+	"CreatedBy": "Coi",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EngineVersion": "5.6.0",
+	"CanContainContent": true,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "City_Generation_Tool_Bar",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
